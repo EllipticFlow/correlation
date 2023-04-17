@@ -120,8 +120,11 @@ void H3Ldecay_quasi2body()
   Double_t masses22[2] = { M_p, M_pi} ;
 
   int const nevents = 1000000;
+  bool f3body=true;
 
   TGenPhaseSpace event1, event2,event3;
+  double weight1, weight2;
+  double pdiff;
   TRandom3 *gRandom = new TRandom3();
   TRandom* vLRand = new TRandom();
 
@@ -136,8 +139,19 @@ void H3Ldecay_quasi2body()
   TH1F * hkstar_MC;
   TH2F * hdphideta_EBD;
   TH1F * hkstar_EBD;
+  TH2F * hdphideta_3body;
+  TH1F * hkstar_3body;
 
+  
   // let's check the  pt eta phi differences for d and vL samples
+  TH1F * hptdiff_p = new TH1F("hptdiff_p","hptdiff_p",120,-.06,0.06);
+  TH1F * hetadiff_p = new TH1F("hetadiff_p","hetadiff_p",100,-.03,0.03);
+  TH1F * hphidiff_p = new TH1F("hphidiff_p","hphidiff_p",200,-.1,0.1);
+
+  TH1F * hptdiff_pi = new TH1F("hptdiff_pi","hptdiff_pi",120,-.06,0.06);
+  TH1F * hetadiff_pi = new TH1F("hetadiff_pi","hetadiff_pi",100,-.03,0.03);
+  TH1F * hphidiff_pi = new TH1F("hphidiff_pi","hphidiff_pi",200,-.1,0.6);
+
   TH1F * hptdiff_d = new TH1F("hptdiff_d","hptdiff_d",120,-.06,0.06);
   TH1F * hetadiff_d = new TH1F("hetadiff_d","hetadiff_d",100,-.03,0.03);
   TH1F * hphidiff_d = new TH1F("hphidiff_d","hphidiff_d",200,-.1,0.1);
@@ -146,17 +160,18 @@ void H3Ldecay_quasi2body()
   TH1F * hetadiff_l = new TH1F("hetadiff_l","hetadiff_l",100,-.03,0.03);
   TH1F * hphidiff_l = new TH1F("hphidiff_l","hphidiff_l",200,-.1,0.1);  
   TH1F * hmassdiff_l = new TH1F("hmassdiff_l","hmassdiff_l",200,-.05,0.05);
+  TH1F * hmassdiff_l3body = new TH1F("hmassdiff_l3body","hmassdiff_l3body",200,-.05,0.05);
 
 
   // load the root file for pt,eta,phi sampling
   TFile * f = new TFile("fout_H3L_MC_0050_015pt_sys_new.root","READ");
-  // TH1F * hptmcd_p = (TH1F *)f->Get("hptmcdiff_p"); 
-  // TH1F * hetamcd_p = (TH1F *)f->Get("hetamcdiff_p"); 
-  // TH1F * hphimcd_p = (TH1F *)f->Get("hphimcdiff_p"); 
+  TH1F * hptmcd_p = (TH1F *)f->Get("hptmcdiff_p"); 
+  TH1F * hetamcd_p = (TH1F *)f->Get("hetamcdiff_p"); 
+  TH1F * hphimcd_p = (TH1F *)f->Get("hphimcdiff_p"); 
 
-  // TH1F * hptmcd_pi = (TH1F *)f->Get("hptmcdiff_pi");
-  // TH1F * hetamcd_pi = (TH1F *)f->Get("hetamcdiff_pi");
-  // TH1F * hetamcd_pi = (TH1F *)f->Get("hetamcdiff_pi");
+  TH1F * hptmcd_pi = (TH1F *)f->Get("hptmcdiff_pi");
+  TH1F * hetamcd_pi = (TH1F *)f->Get("hetamcdiff_pi");
+  TH1F * hphimcd_pi = (TH1F *)f->Get("hphimcdiff_pi");
 
   TH1F * hptmcd_d = (TH1F *)f->Get("hptmcdiff_d");
   TH1F * hetamcd_d = (TH1F *)f->Get("hetamcdiff_d");
@@ -179,8 +194,15 @@ void H3Ldecay_quasi2body()
   sprintf(histname,"hkstar_EBD");
   hkstar_EBD = new TH1F(histname,histname, 800, 0, 200);
 
+  if(f3body){
+    sprintf(histname,"hdphideta_3body");
+    hdphideta_3body= new TH2F(histname,";dphi;deta",600,-3.,3.,600,-3.,3.);
+    sprintf(histname,"hkstar_3body");
+    hkstar_3body = new TH1F(histname,histname, 800, 0, 200);
+  }
+  
   cout << "The corresponding p: " <<  getPfromM(M_H3L,M_vLd,M_vd) << endl;
-
+  
   for (int ie=0;ie<nevents;ie++){
     if(ie%(nevents/10)==0){cout << "Event " << ie << "; " <<double(ie)/double(nevents)*100. << "%" << endl;}
 
@@ -191,9 +213,8 @@ void H3Ldecay_quasi2body()
     //give the M_H3L a momentum distribution by doing the ptweight
     getKinematics(H3Lq2b,M_H3L);
     double ptweight=getptweight(H3Lq2b);
-
     event1.SetDecay(H3Lq2b, 2, masses2); //lambda & d
-    Double_t weight1 = event1.Generate();
+    weight1 = event1.Generate();
     TLorentzVector *vLd= event1.GetDecay(0);
     TLorentzVector *d = event1.GetDecay(1);
 
@@ -206,15 +227,49 @@ void H3Ldecay_quasi2body()
     // TLV for d and vLd, MC 
     dMC.SetXYZM(d->X(),d->Y(),d->Z(),M_d);
     vLdMC.SetXYZM(vLd->X(),vLd->Y(),vLd->Z(),M_Ld);
-    // TLV for d and vLd, embedding 
+    // TLV for d and vLd, embedding, smearing 
     dEBD.SetXYZM(d->X(),d->Y(),d->Z(),M_d);
     pseudoPtEtaPhi(dEBD, hptmcd_d, hetamcd_d, hphimcd_d);
     vLdEBD.SetXYZM(vLd->X(),vLd->Y(),vLd->Z(),M_Ld);
     pseudoPtEtaPhiMass(vLdEBD, hptmcd_l, hetamcd_l, hphimcd_l, hmassmcd_l);
+    //pseudoPtEtaPhi(vLdEBD, hptmcd_l, hetamcd_l, hphimcd_l);
 
+
+
+    TLorentzVector pMC, piMC, pEBD, piEBD;
+    if(f3body){
+      //let's try to do a further decay for the MC vLd 
+      event2.SetDecay(vLdMC, 2, masses22);
+      weight2 = event2.Generate();
+      TLorentzVector *p= event2.GetDecay(0);
+      TLorentzVector *pi = event2.GetDecay(1);
+      
+      pMC.SetXYZM(p->X(),p->Y(),p->Z(),M_p);
+      piMC.SetXYZM(pi->X(),pi->Y(),pi->Z(),M_pi);
+      /// smearing step
+      pEBD.SetXYZM(p->X(),p->Y(),p->Z(),M_p);
+      pseudoPtEtaPhi(pEBD, hptmcd_p, hetamcd_p, hphimcd_p);
+      piEBD.SetXYZM(pi->X(),pi->Y(),pi->Z(),M_pi);
+      pseudoPtEtaPhi(piEBD, hptmcd_pi, hetamcd_pi, hphimcd_pi);
+
+      pdiff=pEBD.Pt()-pMC.Pt();
+      hptdiff_p->Fill(pdiff);
+      pdiff=pEBD.Eta()-pMC.Eta();
+      hetadiff_p->Fill(pdiff);
+      pdiff=pEBD.Phi()-pMC.Phi();
+      hphidiff_p->Fill(pdiff);
+
+      pdiff=piEBD.Pt()-piMC.Pt();
+      hptdiff_pi->Fill(pdiff);
+      pdiff=piEBD.Eta()-piMC.Eta();
+      hetadiff_pi->Fill(pdiff);
+      pdiff=piEBD.Phi()-piMC.Phi();
+      hphidiff_pi->Fill(pdiff);
+    }
+    
+    
 
     //QA, check pt, eta, phi differ after pseudo embedding
-    double pdiff;
     pdiff=dEBD.Pt()-dMC.Pt();
     hptdiff_d->Fill(pdiff);
     pdiff=dEBD.Eta()-dMC.Eta();
@@ -246,6 +301,7 @@ void H3Ldecay_quasi2body()
     if(dphi4pi>TMath::Pi()){dphiEBD=dphi4pi-2*TMath::Pi();}
     detaEBD=dEBD.Eta()-vLdEBD.Eta();
 
+    
     //kstar, MC
     TLorentzVector HMC = dMC+ vLdMC;
     TLorentzVector QvectMC = (vLdMC-dMC);
@@ -269,6 +325,33 @@ void H3Ldecay_quasi2body()
     hkstar_EBD->Fill(kstarEBD,weight1*ptweight);
     hdphideta_EBD->Fill(dphiEBD,detaEBD,weight1*ptweight);
 
+
+    if(f3body){
+      //after smearing, add pi+p to vld
+      TLorentzVector vLd3body=piEBD+pEBD;
+      pdiff=vLd3body.M()-vLdMC.M();
+      hmassdiff_l3body->Fill(pdiff);
+      
+      double dphi3body, deta3body;
+      dphi4pi=dEBD.Phi()-vLd3body.Phi();
+      dphi3body=dphi4pi;
+      if(dphi4pi<-TMath::Pi()){dphi3body=dphi4pi+2*TMath::Pi();}
+      if(dphi4pi>TMath::Pi()){dphi3body=dphi4pi-2*TMath::Pi();}
+      deta3body=dEBD.Eta()-vLd3body.Eta();
+
+      //kstar, 3body
+      TLorentzVector H3body = dEBD+ vLd3body;
+      TLorentzVector Qvect3body = (vLd3body-dEBD);
+      double Pinv3body = H3body.Mag();
+      double Q13body = (M_Ld*M_Ld-M_d*M_d)/Pinv3body;
+      double Q3body=sqrt(Q13body*Q13body-Qvect3body.Mag2());
+      double kstar3body = Q3body/2.0 * 1000; // convert to MeV
+
+      //Add ckstar
+      hkstar_3body->Fill(kstar3body,weight1*weight2*ptweight);
+      hdphideta_3body->Fill(dphi3body,deta3body,weight1*weight2*ptweight);      
+    }
+    
     
     //free memory
     //delete d, vLd;
@@ -289,10 +372,27 @@ void H3Ldecay_quasi2body()
   hdphideta_EBD->Write();
   hkstar_EBD->Write();
 
+
+  if(f3body){
+    hptdiff_p->Write();
+    hetadiff_p->Write();
+    hphidiff_p->Write();
+
+    hptdiff_pi->Write();
+    hetadiff_pi->Write();
+    hphidiff_pi->Write();
+
+    hmassdiff_l3body->Write();  
+
+    hdphideta_3body->Write();
+    hkstar_3body->Write();
+
+  }
   
   time.Stop();
   time.Print();
 }
+
 
 // void H3Ldecay_free3body()
 // {
