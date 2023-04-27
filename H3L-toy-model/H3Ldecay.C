@@ -123,18 +123,13 @@ void H3Ldecay_quasi2body()
   bool f3body=true;
 
   TGenPhaseSpace event1, event2,event3;
-  double weight1, weight2;
+  double weight1, weight2, weight3;
   double pdiff;
   TRandom3 *gRandom = new TRandom3();
   TRandom* vLRand = new TRandom();
 
   char * histname=new char[100];
   
-  TH2F* hpd_dpi = new TH2F("hpd_dpi","hpd_dpi;M(pd) (GeV/c^{2});M(dpi) (GeV/c^{2})", 100, 2.8, 2.86, 100, 2.01, 2.06 );
-  TH2F* hppi_dpi= new TH2F("hppi_dpi","hppi_dpi;M(p#pi) (GeV/c^{2});M(d#pi) (GeV/c^{2})", 100,1.05,1.15, 100, 2.01,2.06);
-  TH2F* hppi_pd = new TH2F("hppi_pd","hppi_pd;M(p#pi) (GeV/c^{2});M(pd) (GeV/c^{2})", 100, 1.05,1.15, 100, 2.8, 2.86 );
-  TH2F* hTpi_Td= new TH2F("hTpi_Td","hTpi_Td;Tpi (MeV);Td (MeV)", 100, 0, 36, 100, 0, 36);
-
   TH2F * hdphideta_MC;
   TH1F * hkstar_MC;
   TH2F * hdphideta_EBD;
@@ -194,23 +189,28 @@ void H3Ldecay_quasi2body()
   sprintf(histname,"hkstar_EBD");
   hkstar_EBD = new TH1F(histname,histname, 800, 0, 200);
 
+  TH2F* hTpi_Td;
+  
   if(f3body){
     sprintf(histname,"hdphideta_3body");
     hdphideta_3body= new TH2F(histname,";dphi;deta",600,-3.,3.,600,-3.,3.);
     sprintf(histname,"hkstar_3body");
     hkstar_3body = new TH1F(histname,histname, 800, 0, 200);
+    
+    hTpi_Td = new TH2F("hTpi_Td","hTpi_Td;Tpi (MeV);Td (MeV)", 4000, 0, 40, 4000, 0, 40);
   }
   
   cout << "The corresponding p: " <<  getPfromM(M_H3L,M_vLd,M_vd) << endl;
   
   for (int ie=0;ie<nevents;ie++){
-    if(ie%(nevents/10)==0){cout << "Event " << ie << "; " <<double(ie)/double(nevents)*100. << "%" << endl;}
+       if(ie%(nevents/10)==0){cout << "Event " << ie << "; " <<double(ie)/double(nevents)*100. << "%" << endl;}
 
     //generate quasi-2 body decay 
     TLorentzVector H3Lf3b; 
     TLorentzVector H3Lq2b; 
 
     //give the M_H3L a momentum distribution by doing the ptweight
+    //    H3Lq2b.SetXYZM(0.,0.,0.,M_H3L);
     getKinematics(H3Lq2b,M_H3L);
     double ptweight=getptweight(H3Lq2b);
     event1.SetDecay(H3Lq2b, 2, masses2); //lambda & d
@@ -218,6 +218,7 @@ void H3Ldecay_quasi2body()
     TLorentzVector *vLd= event1.GetDecay(0);
     TLorentzVector *d = event1.GetDecay(1);
 
+    
     //ckstar
     TLorentzVector dMC;
     TLorentzVector vLdMC;
@@ -233,9 +234,8 @@ void H3Ldecay_quasi2body()
     vLdEBD.SetXYZM(vLd->X(),vLd->Y(),vLd->Z(),M_Ld);
     pseudoPtEtaPhiMass(vLdEBD, hptmcd_l, hetamcd_l, hphimcd_l, hmassmcd_l);
     //pseudoPtEtaPhi(vLdEBD, hptmcd_l, hetamcd_l, hphimcd_l);
-
-
-
+ 
+    
     TLorentzVector pMC, piMC, pEBD, piEBD;
     if(f3body){
       //let's try to do a further decay for the MC vLd 
@@ -243,6 +243,27 @@ void H3Ldecay_quasi2body()
       weight2 = event2.Generate();
       TLorentzVector *p= event2.GetDecay(0);
       TLorentzVector *pi = event2.GetDecay(1);
+
+      //check the Dalitz Plots
+      //boost to the rest frame for Kamada's selection
+      TVector3 boost_vec = -H3Lq2b.BoostVector(); // Boost vector
+      TLorentzVector piboost, pboost, dboost;
+      piboost.SetXYZM( pi->X(), pi->Y(), pi->Z(), pi->M());
+      pboost.SetXYZM( p->X(), p->Y(), p->Z(), p->M());
+      dboost.SetXYZM( d->X(), d->Y(), d->Z(), d->M());
+      piboost.Boost(boost_vec); // Boost b
+      pboost.Boost(boost_vec); // Boost b
+      dboost.Boost(boost_vec); // Boost b
+
+      double Tpi = ( sqrt(M_pi*M_pi+(piboost).P()*(piboost).P())-M_pi )*1000;
+      double Tp = ( (pboost).P()*(pboost).P()/2./M_p)*1000;
+      double Td = ( (dboost).P()*(dboost).P()/2./M_d)* 1000;
+      // cout << (*pi).X() << " " << (*p).X() << " " << (*d).X() << " "  << (*pi).X()+(*p).X()+(*d).X() << endl;
+      // cout << (piboost).X() << " " << (pboost).X() << " " << (dboost).X() << " "  << (piboost).X()+(pboost).X()+(dboost).X() << endl;
+      //  cout << (piboost).P() << " " << (pboost).P() << " " << (dboost).P() << endl;
+
+      //without decay selection, for all possible decay kinematics
+      hTpi_Td->Fill( Tpi, Td, weight1*weight2*ptweight);
       
       pMC.SetXYZM(p->X(),p->Y(),p->Z(),M_p);
       piMC.SetXYZM(pi->X(),pi->Y(),pi->Z(),M_pi);
@@ -264,7 +285,7 @@ void H3Ldecay_quasi2body()
       pdiff=piEBD.Eta()-piMC.Eta();
       hetadiff_pi->Fill(pdiff);
       pdiff=piEBD.Phi()-piMC.Phi();
-      hphidiff_pi->Fill(pdiff);
+      hphidiff_pi->Fill(pdiff);      
     }
     
     
@@ -372,7 +393,6 @@ void H3Ldecay_quasi2body()
   hdphideta_EBD->Write();
   hkstar_EBD->Write();
 
-
   if(f3body){
     hptdiff_p->Write();
     hetadiff_p->Write();
@@ -387,6 +407,7 @@ void H3Ldecay_quasi2body()
     hdphideta_3body->Write();
     hkstar_3body->Write();
 
+    hTpi_Td->Write();    
   }
   
   time.Stop();
@@ -394,110 +415,280 @@ void H3Ldecay_quasi2body()
 }
 
 
-// void H3Ldecay_free3body()
-// {
-//   TStopwatch time;
-//   time.Start();
+void H3Ldecay_free3body()
+{
+  TStopwatch time;
+  time.Start();
   
-//   //  style();
-//   // const Double_t M_H = 2.230;
-//   // const Double_t M_H = 2.9913;
-//   const Double_t M_d = 1.8756;
-//   // const Double_t M_Xi = 1.32171;
-//   const Double_t M_Xi = 1.115683;
-//   const Double_t M_pi = 0.13957;
-//   const Double_t M_p = 0.93827;
-//   const Double_t M_pi0 = 0.134975;
-//   const Double_t M_Ld = 1.115683;
-//   const Double_t M_vLd = 1.115;
-//   const Double_t M_vd = 1.875613;
-//   const Double_t M_H3L= 2.99089+(0.00041-0.00013); //binding energy = 0.13MeV
-//   Double_t masses2[2] = { M_vLd, M_vd} ;
-//   Double_t masses3[3] = { M_p, M_pi, M_d} ;
-//   Double_t masses22[2] = { M_p, M_pi} ;
+  //  style();
+  // const Double_t M_H = 2.230;
+  // const Double_t M_H = 2.9913;
+  const Double_t M_d = 1.8756;
+  // const Double_t M_Xi = 1.32171;
+  const Double_t M_Xi = 1.115683;
+  const Double_t M_pi = 0.13957;
+  const Double_t M_p = 0.93827;
+  const Double_t M_pi0 = 0.134975;
+  const Double_t M_Ld = 1.115683;
+  const Double_t M_vLd = 1.115;
+  const Double_t M_vd = 1.875613;
+  //  const Double_t M_H3L= 2.99089+(0.00041-0.00013); //binding energy = 0.13MeV
+  //  const Double_t M_H3L= 2.99089; //STAR 0.41
+  const Double_t M_H3L=2.99089+0.00041;
+  Double_t masses2[2] = { M_vLd, M_vd} ;
+  Double_t masses3[3] = { M_p, M_pi, M_d} ;
+  Double_t masses22[2] = { M_p, M_pi} ;
 
-//   int const nevents = 1000;
+  int const nevents = 1000000;
 
-//   TGraph* g = new TGraph("xsection.csv");
+  //load the paper data
+  TGraph* g = new TGraph("Td_Kamada_32MeV.csv");
+  //  TGraph* gham = new TGraph("H3L_phasespace_Hammer.csv");
+  
+  TGenPhaseSpace event1, event2,event3;
+  TRandom3 *gRandom = new TRandom3();
 
-//   TGenPhaseSpace event1, event2,event3;
-//   TRandom3 *gRandom = new TRandom3();
+  char * histname=new char[100];
+  
 
-//   TH2F* hpd_dpi = new TH2F("hpd_dpi","hpd_dpi;M(pd) (GeV/c^{2});M(dpi) (GeV/c^{2})", 100, 2.8, 2.86, 100, 2.01, 2.06 );
-//   TH2F* hppi_dpi= new TH2F("hppi_dpi","hppi_dpi;M(p#pi) (GeV/c^{2});M(d#pi) (GeV/c^{2})", 100,1.05,1.15, 100, 2.01,2.06);
-//   TH2F* hppi_pd = new TH2F("hppi_pd","hppi_pd;M(p#pi) (GeV/c^{2});M(pd) (GeV/c^{2})", 100, 1.05,1.15, 100, 2.8, 2.86 );
-//   TH2F* hTpi_Td= new TH2F("hTpi_Td","hTpi_Td;Tpi (MeV);Td (MeV)", 100, 0, 36, 100, 0, 36);
-//   TH2F * hdphideta = new TH2F("hdphideta","hdphideta",200,-5,5,200,-5,5);
+  TH2F * hdphideta_MC;
+  TH1F * hkstar_MC;
+  TH2F * hdphideta_EBD;
+  TH1F * hkstar_EBD;
+
+  TH2F * hdphideta_MC_Kamada;
+  TH1F * hkstar_MC_Kamada;
+  TH2F * hdphideta_EBD_Kamada;
+  TH1F * hkstar_EBD_Kamada;
+
+  sprintf(histname,"hdphideta_MC");
+  hdphideta_MC= new TH2F(histname,";dphi;deta",600,-3.,3.,600,-3.,3.);
+  sprintf(histname,"hkstar_MC");
+  hkstar_MC = new TH1F(histname,histname, 800, 0, 200);
+  sprintf(histname,"hdphideta_EBD");
+  hdphideta_EBD= new TH2F(histname,";dphi;deta",600,-3.,3.,600,-3.,3.);
+  sprintf(histname,"hkstar_EBD");
+  hkstar_EBD = new TH1F(histname,histname, 800, 0, 200);
+
+  sprintf(histname,"hdphideta_MC_Kamada");
+  hdphideta_MC_Kamada= new TH2F(histname,";dphi;deta",600,-3.,3.,600,-3.,3.);
+  sprintf(histname,"hkstar_MC_Kamada");
+  hkstar_MC_Kamada = new TH1F(histname,histname, 800, 0, 200);
+  sprintf(histname,"hdphideta_EBD_Kamada");
+  hdphideta_EBD_Kamada= new TH2F(histname,";dphi;deta",600,-3.,3.,600,-3.,3.);
+  sprintf(histname,"hkstar_EBD_Kamada");
+  hkstar_EBD_Kamada = new TH1F(histname,histname, 800, 0, 200);
 
   
-//   for (int ie=0;ie<nevents;ie++){
-//       TLorentzVector H3Lf3b; 
-//       TLorentzVector H3Lq2b; 
+  // let's check the  pt eta phi differences for d and vL samples
+  TH1F * hptdiff_p = new TH1F("hptdiff_p","hptdiff_p",120,-.06,0.06);
+  TH1F * hetadiff_p = new TH1F("hetadiff_p","hetadiff_p",100,-.03,0.03);
+  TH1F * hphidiff_p = new TH1F("hphidiff_p","hphidiff_p",200,-.1,0.1);
 
-//       //generate free 3  body
-//       H3Lf3b.SetXYZM( 0,0,0,M_H3L);
-//       // bool isallow = event3.SetDecay(H3Lf3b, 3, masses3,"Fermi");
-//       bool isallow = event3.SetDecay(H3Lf3b, 3, masses3);
-//       if (isallow){
-//       double weight = event3.Generate();
-//       TLorentzVector *p= event3.GetDecay(0);
-//       TLorentzVector *pi = event3.GetDecay(1);
-//       TLorentzVector *d = event3.GetDecay(2);
-//       // // cout << (*d).Pt()<< " "<<(*d).M() << endl;
+  TH1F * hptdiff_pi = new TH1F("hptdiff_pi","hptdiff_pi",120,-.06,0.06);
+  TH1F * hetadiff_pi = new TH1F("hetadiff_pi","hetadiff_pi",100,-.03,0.03);
+  TH1F * hphidiff_pi = new TH1F("hphidiff_pi","hphidiff_pi",200,-.1,0.6);
 
-//       TLorentzVector ppi = *p + *pi;
-//       TLorentzVector pd = *p + *d;
-//       TLorentzVector dpi = *pi+*d;
+  TH1F * hptdiff_d = new TH1F("hptdiff_d","hptdiff_d",120,-.06,0.06);
+  TH1F * hetadiff_d = new TH1F("hetadiff_d","hetadiff_d",100,-.03,0.03);
+  TH1F * hphidiff_d = new TH1F("hphidiff_d","hphidiff_d",200,-.1,0.1);
 
-//       double Tpi = ( sqrt(M_pi*M_pi+(*pi).P()*(*pi).P())-M_pi )*1000;
-//       double Tp = ( (*p).P()*(*p).P()/2./M_p)*1000;
-//       double Td = ( (*p).P()*(*p).P()/2./M_d)* 1000;
-//       // cout << Td+Tpi+Tp << endl;
-//       // cout << ( (*d).Vect() + (*pi).Vect() + (*p).Vect() ).Mag() << endl;
+  TH1F * hptdiff_l = new TH1F("hptdiff_l","hptdiff_l",120,-.06,0.06);
+  TH1F * hetadiff_l = new TH1F("hetadiff_l","hetadiff_l",100,-.03,0.03);
+  TH1F * hphidiff_l = new TH1F("hphidiff_l","hphidiff_l",200,-.1,0.1);  
+  TH1F * hmassdiff_l = new TH1F("hmassdiff_l","hmassdiff_l",200,-.05,0.05);
+  TH1F * hmassdiff_l3body = new TH1F("hmassdiff_l3body","hmassdiff_l3body",200,-.05,0.05);
 
-//       TLorentzVector LA1 = ppi;
-//       TLorentzVector LA2 = *d;
-//       double dphi4pi, dphi, deta;
-//       dphi4pi=LA1.Phi()-LA2.Phi();
-//       dphi=dphi4pi;
-//       if(dphi4pi<=-TMath::Pi()){dphi=dphi4pi+2*TMath::Pi();}
-//       if(dphi4pi>=TMath::Pi()){dphi=dphi4pi-2*TMath::Pi();}
-//       //	deta=rapidity1-rapidity2;
-//       deta=LA1.Eta()-LA2.Eta();
+  // load the root file for pt,eta,phi sampling
+  TFile * f = new TFile("fout_H3L_MC_0050_015pt_sys_new.root","READ");
+  TH1F * hptmcd_p = (TH1F *)f->Get("hptmcdiff_p"); 
+  TH1F * hetamcd_p = (TH1F *)f->Get("hetamcdiff_p"); 
+  TH1F * hphimcd_p = (TH1F *)f->Get("hphimcdiff_p"); 
+
+  TH1F * hptmcd_pi = (TH1F *)f->Get("hptmcdiff_pi");
+  TH1F * hetamcd_pi = (TH1F *)f->Get("hetamcdiff_pi");
+  TH1F * hphimcd_pi = (TH1F *)f->Get("hphimcdiff_pi");
+
+  TH1F * hptmcd_d = (TH1F *)f->Get("hptmcdiff_d");
+  TH1F * hetamcd_d = (TH1F *)f->Get("hetamcdiff_d");
+  TH1F * hphimcd_d = (TH1F *)f->Get("hphimcdiff_d");
+
+  TH1F * hptmcd_l = (TH1F *)f->Get("hptmcdiff_l"); 
+  TH1F * hetamcd_l = (TH1F *)f->Get("hetamcdiff_l"); 
+  TH1F * hphimcd_l = (TH1F *)f->Get("hphimcdiff_l");
+  TH1F * hmassmcd_l = (TH1F *)f->Get("hmassmcdiff_l"); 
+
+  
+  TH2F* hpd_dpi = new TH2F("hpd_dpi","hpd_dpi;M(pd) (GeV/c^{2});M(dpi) (GeV/c^{2})", 100, 2.8, 2.86, 100, 2.01, 2.06 );
+  TH2F* hppi_dpi= new TH2F("hppi_dpi","hppi_dpi;M(p#pi) (GeV/c^{2});M(d#pi) (GeV/c^{2})", 100,1.05,1.15, 100, 2.01,2.06);
+  TH2F* hppi_pd = new TH2F("hppi_pd","hppi_pd;M(p#pi) (GeV/c^{2});M(pd) (GeV/c^{2})", 100, 1.05,1.15, 100, 2.8, 2.86 );
+  TH2F* hTpi_Td= new TH2F("hTpi_Td","hTpi_Td;Tpi (MeV);Td (MeV)", 350, 0, 35, 350, 0, 35);
+
+  TH2F* hpd_dpi_Kamada = new TH2F("hpd_dpi_Kamada","hpd_dpi;M(pd) (GeV/c^{2});M(dpi) (GeV/c^{2})", 100, 2.8, 2.86, 100, 2.01, 2.06 );
+  TH2F* hppi_dpi_Kamada = new TH2F("hppi_dpi_Kamada","hppi_dpi;M(p#pi) (GeV/c^{2});M(d#pi) (GeV/c^{2})", 100,1.05,1.15, 100, 2.01,2.06);
+  TH2F* hppi_pd_Kamada = new TH2F("hppi_pd_Kamada","hppi_pd;M(p#pi) (GeV/c^{2});M(pd) (GeV/c^{2})", 100, 1.05,1.15, 100, 2.8, 2.86 );
+  TH2F* hTpi_Td_Kamada = new TH2F("hTpi_Td_Kamada","hTpi_Td;Tpi (MeV);Td (MeV)", 5000, 30, 35, 5000, 0, 5);
+
+  TH1F* hTd_Kamada = new TH1F("hTd_Kamada","hTd_Kamada;Td;",5000,0,5);
+  TH1F* hkd_Kamada = new TH1F("hkd_Kamada","hkd_Kamada;kd;",5000,0,5);
+    
+  for (int ie=0;ie<nevents;ie++){
+       if(ie%(nevents/10)==0){cout << "Event " << ie << "; " <<double(ie)/double(nevents)*100. << "%" << endl;}
+
+    TLorentzVector H3Lf3b; 
+    TLorentzVector H3Lq2b; 
+
+    //generate free 3  body
+    getKinematics(H3Lf3b,M_H3L);
+    double ptweight=getptweight(H3Lf3b);
+    //    H3Lf3b.SetXYZM( 0,0,0,M_H3L);
+    // bool isallow = event3.SetDecay(H3Lf3b, 3, masses3,"Fermi");
+    bool isallow = event3.SetDecay(H3Lf3b, 3, masses3);
+    if (isallow){
+      double weight = event3.Generate();
+      TLorentzVector *p= event3.GetDecay(0);
+      TLorentzVector *pi = event3.GetDecay(1);
+      TLorentzVector *d = event3.GetDecay(2);
+
+      TLorentzVector ppi = *p + *pi;
+      TLorentzVector pd = *p + *d;
+      TLorentzVector dpi = *pi+*d;
+
+      //boost to the rest frame for Kamada's selection
+      TVector3 boost_vec = -H3Lf3b.BoostVector(); // Boost vector
+      TLorentzVector piboost, pboost, dboost;
+      piboost.SetXYZM( pi->X(), pi->Y(), pi->Z(), pi->M());
+      pboost.SetXYZM( p->X(), p->Y(), p->Z(), p->M());
+      dboost.SetXYZM( d->X(), d->Y(), d->Z(), d->M());
+      piboost.Boost(boost_vec); // Boost b
+      pboost.Boost(boost_vec); // Boost b
+      dboost.Boost(boost_vec); // Boost b
       
-//       hdphideta->Fill(dphi,deta);
+      double Tpi = ( sqrt(M_pi*M_pi+(piboost).P()*(piboost).P())-M_pi )*1000;
+      double Tp = ( (pboost).P()*(pboost).P()/2./M_p)*1000;
+      double Td = ( (dboost).P()*(dboost).P()/2./M_d)* 1000;
+      // cout << (*pi).X() << " " << (*p).X() << " " << (*d).X() << " "  << (*pi).X()+(*p).X()+(*d).X() << endl;
+      // cout << (piboost).X() << " " << (pboost).X() << " " << (dboost).X() << " "  << (piboost).X()+(pboost).X()+(dboost).X() << endl;
+      // cout << (piboost).P() << " " << (pboost).P() << " " << (dboost).P() << endl;
+
+      /// without decay selection, for all possible decay kinematics
+      hppi_pd->Fill( ppi.M(), pd.M(),weight*ptweight); 
+      hppi_dpi->Fill( ppi.M(), dpi.M(),weight*ptweight); 
+      hpd_dpi->Fill( pd.M(), dpi.M(),weight*ptweight); 
+      hTpi_Td->Fill( Tpi, Td, weight*ptweight);
 
       
-//       // cout << ppi.M()<<" "<<pd.M()<<endl;
-//       double weight_gaus = TMath::Gaus(Tpi, 32, 1, true);
-//       if (Td<0.5) weight_gaus = weight_gaus* (g->Eval(Td));
-//       else weight_gaus = 0;
-//       // double weight_gaus = 1;
-//       // if ( Td<0.3 && Tpi<33 && Tpi>31 ){
-//         hppi_pd->Fill( ppi.M(), pd.M(),weight*weight_gaus); 
-//         hppi_dpi->Fill( ppi.M(), dpi.M(),weight*weight_gaus); 
-//         hpd_dpi->Fill( pd.M(), dpi.M(),weight*weight_gaus); 
-//         hTpi_Td->Fill( Tpi, Td, weight*weight_gaus);
-//       // }
-//     }
-//     else {cout << "decay not allowed" << endl;}
-//   }
+      //weight factor based on Fig7, Gaus on Tpi, Kamada, arXiv:nucl-th/9709035
+      double weight_Kamada = TMath::Gaus(Tpi, 32, 1, true);
+      if (Td<0.5) weight_Kamada = weight_Kamada* (g->Eval(Td));
+      else weight_Kamada = 0;
 
-//   TFile* file = new TFile("H3L_Dz3b.root","recreate");
-//   hppi_pd->Write();
-//   hpd_dpi->Write();
-//   hppi_dpi->Write();
-//   hTpi_Td->Write();
-//   hdphideta->Write();
+      // Dalitz plot from Kamada's study 
+      hppi_pd_Kamada->Fill( ppi.M(), pd.M(),weight*ptweight*weight_Kamada); 
+      hppi_dpi_Kamada->Fill( ppi.M(), dpi.M(),weight*ptweight*weight_Kamada); 
+      hpd_dpi_Kamada->Fill( pd.M(), dpi.M(),weight*ptweight*weight_Kamada); 
+      hTpi_Td_Kamada->Fill( Tpi, Td, weight*ptweight*weight_Kamada);
+      hTd_Kamada->Fill(Td,weight*ptweight*weight_Kamada);
+      hkd_Kamada->Fill((dboost).P(),weight*ptweight*weight_Kamada);
+
+      //ckstar
+      TLorentzVector dMC, pMC, piMC, vLdMC;
+      TLorentzVector dEBD, pEBD, piEBD, vLdEBD;
+
+      // TLV for d and vLd, MC 
+      dMC.SetXYZM(d->X(),d->Y(),d->Z(),M_d);
+      //      vLdMC.SetXYZM(ppi->X(),ppi->Y(),ppi->Z(),M_Ld);
+      vLdMC= *p + *pi;
+      
+      // TLV for d and vLd, embedding, smearing 
+      dEBD.SetXYZM(d->X(),d->Y(),d->Z(),M_d);
+      pseudoPtEtaPhi(dEBD, hptmcd_d, hetamcd_d, hphimcd_d);
+      pEBD.SetXYZM(p->X(),p->Y(),p->Z(),M_p);
+      pseudoPtEtaPhi(pEBD, hptmcd_p, hetamcd_p, hphimcd_p);
+      piEBD.SetXYZM(pi->X(),pi->Y(),pi->Z(),M_pi);
+      pseudoPtEtaPhi(piEBD, hptmcd_pi, hetamcd_pi, hphimcd_pi);
+      vLdEBD=piEBD+pEBD;
+
+      // check the deta dphi, MC
+      double dphi4pi, dphiMC, detaMC, dphiEBD, detaEBD;
+      dphi4pi=dMC.Phi()-vLdMC.Phi();
+      dphiMC=dphi4pi;
+      if(dphi4pi<-TMath::Pi()){dphiMC=dphi4pi+2*TMath::Pi();}
+      if(dphi4pi>TMath::Pi()){dphiMC=dphi4pi-2*TMath::Pi();}
+      detaMC=dMC.Eta()-vLdMC.Eta();
+      // check the deta dphi, embedding
+      dphi4pi=dEBD.Phi()-vLdEBD.Phi();
+      dphiEBD=dphi4pi;
+      if(dphi4pi<-TMath::Pi()){dphiEBD=dphi4pi+2*TMath::Pi();}
+      if(dphi4pi>TMath::Pi()){dphiEBD=dphi4pi-2*TMath::Pi();}
+      detaEBD=dEBD.Eta()-vLdEBD.Eta();
+
+      //kstar, MC
+      TLorentzVector HMC = dMC+ vLdMC;
+      TLorentzVector QvectMC = (vLdMC-dMC);
+      double PinvMC = HMC.Mag();
+      double Q1MC = (M_Ld*M_Ld-M_d*M_d)/PinvMC;
+      double QMC=sqrt(Q1MC*Q1MC-QvectMC.Mag2());
+      double kstarMC = QMC/2.0 * 1000; // convert to MeV
+
+      //kstar, EBD
+      TLorentzVector HEBD = dEBD+ vLdEBD;
+      TLorentzVector QvectEBD = (vLdEBD-dEBD);
+      double PinvEBD = HEBD.Mag();
+      double Q1EBD = (M_Ld*M_Ld-M_d*M_d)/PinvEBD;
+      double QEBD=sqrt(Q1EBD*Q1EBD-QvectEBD.Mag2());
+      double kstarEBD = QEBD/2.0 * 1000; // convert to MeV
+
+      //Add ckstar
+      hkstar_MC->Fill(kstarMC,weight*ptweight);
+      hdphideta_MC->Fill(dphiMC,detaMC,weight*ptweight);
+      //Add ckstar
+      hkstar_EBD->Fill(kstarEBD,weight*ptweight);
+      hdphideta_EBD->Fill(dphiEBD,detaEBD,weight*ptweight);
+
+      //Add ckstar
+      hkstar_MC_Kamada->Fill(kstarMC,weight*ptweight*weight_Kamada);
+      hdphideta_MC_Kamada->Fill(dphiMC,detaMC,weight*ptweight*weight_Kamada);
+      //Add ckstar
+      hkstar_EBD_Kamada->Fill(kstarEBD,weight*ptweight*weight_Kamada);
+      hdphideta_EBD_Kamada->Fill(dphiEBD,detaEBD,weight*ptweight*weight_Kamada);
+
+
+    }
+    else {cout << "decay not allowed" << endl;}
+  }
+
+  TFile* file = new TFile("H3L_Dz3b.root","recreate");
+
+  hppi_pd->Write();
+  hpd_dpi->Write();
+  hppi_dpi->Write();  
+  hTpi_Td->Write();
+  hkstar_MC->Write();
+  hdphideta_MC->Write();
+  hkstar_EBD->Write();
+  hdphideta_EBD->Write();
+
+  hppi_pd_Kamada->Write();
+  hpd_dpi_Kamada->Write();
+  hppi_dpi_Kamada->Write();  
+  hTpi_Td_Kamada->Write();
+  hkstar_MC_Kamada->Write();
+  hdphideta_MC_Kamada->Write();
+  hkstar_EBD_Kamada->Write();
+  hdphideta_EBD_Kamada->Write();
+
+  hTd_Kamada->Write();
+  hkd_Kamada->Write();
   
-//   time.Stop();
-//   time.Print();
-// }
+  time.Stop();
+  time.Print();
+}
 
 void H3Ldecay()
 {
-  //  H3Ldecay_free3body();
-  H3Ldecay_quasi2body();
+  H3Ldecay_free3body();
+  //  H3Ldecay_quasi2body();
 }
 
 
